@@ -1,91 +1,47 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #include <stdio.h>
 #include <conio.h>
 #include <windows.h>
+#include <stdlib.h> 
+#include <time.h>   
+
+#include "buffer.h"
 
 #define UP 72
 #define LEFT 75
 #define RIGHT 77
 #define DOWN 80
 
-#define ScreenSize 2
+#define MAP_WIDTH 20
+#define MAP_HEIGHT 20
 
-#define MAP_WIDTH 30
-#define MAP_HEIGHT 30
+#define MAX_SNAKE_LENGTH 100
 
-int index = 0;
-
-HANDLE screen[ScreenSize];
-
-void initialize()
-{
-    CONSOLE_CURSOR_INFO cursor;
-
-    // 화면 버퍼를 2개 생성합니다.
-
-    cursor.bVisible = FALSE;
-
-    for (int i = 0; i < ScreenSize; i++)
-    {
-        screen[i] = CreateConsoleScreenBuffer
-        (
-            GENERIC_READ | GENERIC_WRITE,
-            0, NULL, CONSOLE_TEXTMODE_BUFFER, NULL
-        );
-
-        SetConsoleCursorInfo(screen[i], &cursor);
-    }
-}
-
-void flip()
-{
-    SetConsoleActiveScreenBuffer(screen[index]);
-
-    index = !index;
-}
-
-void clear()
-{
-    COORD position = { 0,0 };
-
-    DWORD dword;
-
-    CONSOLE_SCREEN_BUFFER_INFO buffer;
-
-    HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
-
-    GetConsoleScreenBufferInfo(console, &buffer);
-
-    int width = buffer.srWindow.Right - buffer.srWindow.Left + 1;
-    int height = buffer.srWindow.Bottom - buffer.srWindow.Top + 1;
-
-    FillConsoleOutputCharacter(screen[index], ' ', width * height, position, &dword);
-}
-
-void release()
-{
-    for (int i = 0; i < ScreenSize; i++)
-    {
-        CloseHandle(screen[i]);
-    }
-}
-
-void render(int x, int y, const char* character)
-{
-    DWORD dword;
-    COORD position = { x,y };
-
-    SetConsoleCursorPosition(screen[index], position);
-    WriteFile(screen[index], character, strlen(character), &dword, NULL);
-}
+int map[MAP_WIDTH][MAP_HEIGHT] = {0};
 
 void MAP()
 {
-    int i;
-    int j;
+    int i,j;
 
-    for (i = 0; i < MAP_WIDTH; i++)
+    for (i = 0; i < MAP_HEIGHT; i++)
     {
+        for (j = 0; j < MAP_WIDTH; j++)
+        {
+            if (i == 0 || i == MAP_HEIGHT - 1 || j == 0 || j == MAP_WIDTH - 1)
+            {
+                map[i][j] = 1;
+            }
+            else
+            {
+                map[i][j] = 0;
+            }
 
+            if (map[i][j] == 1)
+            {
+                render(j * 2, i, "■");
+            }
+        }
     }
 }
 
@@ -97,61 +53,94 @@ int main()
 
     GetConsoleScreenBufferInfo(handle, &console);
 
-    int width = console.srWindow.Right - console.srWindow.Left - 2;
-    int height = console.srWindow.Bottom - console.srWindow.Top + 1;
+    srand((unsigned int)time(NULL));
+
+    //int width = console.srWindow.Right - console.srWindow.Left - 2;
+    //int height = console.srWindow.Bottom - console.srWindow.Top + 1;
 
     initialize();
 
-    int x = 2;
-    int y = 2;
+    int snakeX[MAX_SNAKE_LENGTH];
+    int snakeY[MAX_SNAKE_LENGTH];
 
-    char key = 0;
+    int snakeLength = 1;
+
+    snakeX[0] = 10;
+    snakeY[0] = 10;
+
+    int x = 10;
+    int y = 10;
+    int dir = 0; // 0은 정지상태
+
+    int score = 0;
+
+    int appleX = (rand() % (MAP_WIDTH - 2) + 1) * 2;
+    int appleY = rand() % (MAP_HEIGHT - 2) + 1;
 
     while (1)
     {
-        flip();
-
         clear();
+        MAP();
 
-        key = _getch();
-
-        if (key == -32 || key == 0)
+        if (_kbhit())
         {
-            key = _getch();
+            int key = _getch();
+            if (key == -32 || key == 0) key = _getch();
+
+            if (dir == 0) dir = key;
+            else {
+                if (key == UP && dir != DOWN) dir = key;
+                else if (key == DOWN && dir != UP) dir = key;
+                else if (key == LEFT && dir != RIGHT) dir = key;
+                else if (key == RIGHT && dir != LEFT) dir = key;
+            }
         }
 
-        switch (key)
+        if (dir != 0)
         {
-        case UP:
-            if (y > 0)
+            for (int i = snakeLength - 1; i > 0; i--)
             {
-                y--;
+                snakeX[i] = snakeX[i - 1];
+                snakeY[i] = snakeY[i - 1];
             }
-            break;
-        case LEFT:
-            if (x > 0)
+
+            switch (dir)
             {
-                x -= 2;
+            case UP:    snakeY[0]--; break;
+            case DOWN:  snakeY[0]++; break;
+            case LEFT:  snakeX[0] -= 2; break;
+            case RIGHT: snakeX[0] += 2; break;
             }
-            break;
-        case RIGHT:
-            if (width > x)
-            {
-                x += 2;
-            }
-            break;
-        case DOWN:
-            if (height > y)
-            {
-                y++;
-            }
-            break;
-        default:
-            render(0, 0, "exception");
+        }
+
+        if (snakeX[0] == appleX && snakeY[0] == appleY)
+        {
+            score++;
+            if (snakeLength < MAX_SNAKE_LENGTH) snakeLength++;
+            appleX = (rand() % (MAP_WIDTH - 2) + 1) * 2;
+            appleY = rand() % (MAP_HEIGHT - 2) + 1;
+        }
+
+        if (snakeX[0] <= 0 || snakeX[0] >= (MAP_WIDTH - 1) * 2 || snakeY[0] <= 0 || snakeY[0] >= MAP_HEIGHT - 1)
+        {
+            render(MAP_WIDTH, MAP_HEIGHT / 2, "G A M E  O V E R");
+            flip();
+            Sleep(2000);
             break;
         }
 
-        render(x, y, "■");
+        render(appleX, appleY, "●");
+        for (int i = 0; i < snakeLength; i++)
+        {
+            render(snakeX[i], snakeY[i], "■");
+        }
+        
+        char scoreStr[20];
+        sprintf_s(scoreStr, sizeof(scoreStr), "Score: %d", score);
+        render(MAP_WIDTH * 2 + 2, MAP_HEIGHT - 1, scoreStr);
+
+        flip();
+        Sleep(200);
     }
 
     release();
